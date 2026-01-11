@@ -9,6 +9,7 @@
   <img src="screenshots/search.png" width="45%" />
   <img src="screenshots/favorites.png" width="45%" />
   <img src="screenshots/menu.png" width="45%" />
+  <img src="screenshots/theming.png" width="45%" />
 </p>
 
 ## Features
