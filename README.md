@@ -11,6 +11,10 @@
   <img src="screenshots/menu.png" width="45%" />
   <img src="screenshots/theming.png" width="45%" />
   <img src="screenshots/details.png" width="45%" />
+  <img src="screenshots/emojis.png" width="45%" />
+  <img src="screenshots/link_copied.png" width="45%" />
+  <img src="screenshots/import_menu.png" width="45%" />
+  <img src="screenshots/import_url.png" width="45%" />
 </p>
 
 ## Features
