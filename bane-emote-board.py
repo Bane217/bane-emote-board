@@ -33,7 +33,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 LOCAL_IMG_DIR.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_TENOR_KEY = "LIVDSRZULELA"
-BATCH_SIZE = 50  # Increased to help fill larger screens faster
+BATCH_SIZE = 50
 CARD_WIDTH = 180
 MIN_SPACING = 10
 
@@ -44,6 +44,7 @@ DEFAULT_THEME = {
     "bg_primary": "#121212",
     "bg_secondary": "#1e1e1e",
     "bg_tertiary": "#2d2d2d",
+    "bg_canvas": "#121212",    # <--- NEW: Background behind the cards
     "accent": "#007acc",
     "text_primary": "#ffffff",
     "text_secondary": "#bbbbbb",
@@ -87,9 +88,23 @@ class ThemeManager:
     @staticmethod
     def get_stylesheet(theme):
         if not isinstance(theme, dict): theme = DEFAULT_THEME
+
+        # Ensure new keys exist if loading old config
+        bg_canvas = theme.get('bg_canvas', theme['bg_primary'])
+
         return f"""
             QMainWindow {{ background-color: {theme['bg_primary']}; }}
             QWidget {{ color: {theme['text_primary']}; font-family: 'Segoe UI', sans-serif; font-size: 14px; }}
+
+            /* Canvas / Scroll Area Background */
+            QScrollArea {{
+                background-color: {bg_canvas};
+                border: none;
+            }}
+            /* Specific ID for the content widget inside ScrollArea to ensure it gets colored */
+            #ScrollContent {{
+                background-color: {bg_canvas};
+            }}
 
             QLineEdit {{
                 background-color: {theme['bg_tertiary']};
@@ -302,7 +317,7 @@ class EmojiSource(DataSource):
                         })
                         seen.add(char)
                 except ValueError:
-                    pass # Not a defined char
+                    pass
 
     def search(self, query, pos=None):
         offset = pos if pos else 0
@@ -312,12 +327,10 @@ class EmojiSource(DataSource):
             q = query.lower()
             filtered = []
 
-            # Direct char match or by name
             for item in self.all_emojis:
                 if q in item['name'].lower() or q == item['url']:
                     filtered.append(item)
 
-            # Pagination for search results too, in case "smile" returns 1000 items
             sliced = filtered[offset : offset + BATCH_SIZE]
             next_offset = offset + len(sliced)
             if next_offset >= len(filtered): next_offset = None
@@ -452,7 +465,6 @@ class FullscreenViewer(QDialog):
 
         if data['type'] == 'emoji':
             self.lbl_img.setText(data['url'])
-            # Explicit Stylesheet for Fullscreen size
             self.lbl_img.setStyleSheet("font-size: 350px; color: white; background: transparent;")
             self.lbl_dim_val.setText("Scalable (Text)")
         else:
@@ -485,20 +497,9 @@ class ImageCard(QFrame):
         self.data = data
         self.local_path = None
         self.setFixedSize(CARD_WIDTH, CARD_WIDTH)
-        self.cfg = load_config()
-        self.theme = self.cfg['theme']
 
-        self.setStyleSheet(f"""
-            QFrame {{
-                background-color: {self.theme['bg_secondary']};
-                border-radius: 12px;
-                border: 1px solid {self.theme['border']};
-            }}
-            QFrame:hover {{
-                border: 1px solid {self.theme['accent']};
-                background-color: {self.theme['bg_tertiary']};
-            }}
-        """)
+        # Initial Theme Application
+        self.update_theme()
 
         self.layout = QVBoxLayout(self)
         self.layout.setContentsMargins(8, 8, 8, 8)
@@ -522,27 +523,16 @@ class ImageCard(QFrame):
         self.info_btn.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
         self.info_btn.clicked.connect(self.open_fullscreen)
         self.info_btn.move(140, 140)
-        self.info_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {self.theme['accent']};
-                color: white;
-                border-radius: 15px;
-                font-family: serif;
-                font-weight: bold;
-                font-style: italic;
-                border: 1px solid rgba(255,255,255,0.3);
-                font-size: 16px;
-            }}
-            QPushButton:hover {{ background-color: white; color: {self.theme['accent']}; }}
-        """)
         self.info_btn.hide()
+
+        # Apply button styles (done in update_theme, but need to be sure)
+        self.update_theme_buttons()
 
         if "error" in data:
             self.lbl.setText("Error")
             self.lbl.setStyleSheet("color: #e74c3c;")
         elif data['type'] == 'emoji':
             self.lbl.setText(data['url'])
-            # Force size for Grid view
             self.lbl.setStyleSheet("font-size: 130px; border: none; background: transparent;")
             self.local_path = "EMOJI"
         elif data['type'] == 'local':
@@ -553,6 +543,39 @@ class ImageCard(QFrame):
             self.worker.image_loaded.connect(self.load_bytes)
             self.worker.failed.connect(lambda: self.lbl.setText("X"))
             self.worker.start()
+
+    def update_theme(self):
+        self.cfg = load_config()
+        self.theme = self.cfg['theme']
+
+        self.setStyleSheet(f"""
+            QFrame {{
+                background-color: {self.theme['bg_secondary']};
+                border-radius: 12px;
+                border: 1px solid {self.theme['border']};
+            }}
+            QFrame:hover {{
+                border: 1px solid {self.theme['accent']};
+                background-color: {self.theme['bg_tertiary']};
+            }}
+        """)
+        self.update_theme_buttons()
+
+    def update_theme_buttons(self):
+        if hasattr(self, 'info_btn'):
+             self.info_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {self.theme['accent']};
+                    color: white;
+                    border-radius: 15px;
+                    font-family: serif;
+                    font-weight: bold;
+                    font-style: italic;
+                    border: 1px solid rgba(255,255,255,0.3);
+                    font-size: 16px;
+                }}
+                QPushButton:hover {{ background-color: white; color: {self.theme['accent']}; }}
+            """)
 
     def is_favorited(self):
         if not FAVS_FILE.exists(): return False
@@ -640,7 +663,7 @@ class ImageCard(QFrame):
         cb = QApplication.clipboard()
 
         if self.data.get('type') == 'emoji':
-            cb.setText(self.data['url']) # URL is the char
+            cb.setText(self.data['url'])
             self.flash("Copied Char")
             return
 
@@ -688,7 +711,6 @@ class ImageCard(QFrame):
         if self.data['type'] == 'emoji':
             save_path, _ = QFileDialog.getSaveFileName(self, "Save Emoji", "emoji.png", "PNG (*.png)")
             if save_path:
-                # Render emoji to Pixmap
                 pix = QPixmap(512, 512)
                 pix.fill(Qt.GlobalColor.transparent)
                 painter = QPainter(pix)
@@ -751,8 +773,9 @@ class SettingsDialog(QDialog):
         self.color_buttons = {}
         colors_to_edit = {
             "Background (Main)": "bg_primary",
-            "Background (Card)": "bg_secondary",
-            "Background (Input)": "bg_tertiary",
+            "Canvas Background": "bg_canvas",    # <--- NEW SETTING
+            "Card Color": "bg_secondary",
+            "Input Color": "bg_tertiary",
             "Accent Color": "accent",
             "Text Color": "text_primary",
             "Border Color": "border"
@@ -815,17 +838,13 @@ class App(QMainWindow):
         self.current_query = ""
         self.current_source_name = ""
 
-        # Track active widgets for responsive reflow
         self.search_card_widgets = []
         self.fav_card_widgets = []
 
-        # Debounce timer for resizing smoothness
         self.resize_timer = QTimer()
         self.resize_timer.setSingleShot(True)
-        self.resize_timer.setInterval(100) # 100ms delay
+        self.resize_timer.setInterval(100)
         self.resize_timer.timeout.connect(self.reflow_grids)
-
-        self.apply_theme()
 
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
@@ -866,8 +885,10 @@ class App(QMainWindow):
         self.res_area = QScrollArea()
         self.res_area.setWidgetResizable(True)
         self.res_widget = QWidget()
+        # IMPORTANT: Set ID for CSS styling of background
+        self.res_widget.setObjectName("ScrollContent")
+
         self.res_grid = QGridLayout(self.res_widget)
-        # AlignTop allows grid to stretch horizontally but keeps items at top
         self.res_grid.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.res_area.setWidget(self.res_widget)
         self.res_area.verticalScrollBar().valueChanged.connect(self.check_scroll)
@@ -882,7 +903,7 @@ class App(QMainWindow):
         fav_search_bar_layout = QHBoxLayout()
         self.fav_search_input = QLineEdit()
         self.fav_search_input.setPlaceholderText("Search saved favorites...")
-        self.fav_search_input.textChanged.connect(self.load_favorites) # Live filter
+        self.fav_search_input.textChanged.connect(self.load_favorites)
         fav_search_bar_layout.addWidget(self.fav_search_input)
 
         self.fav_tab_layout.addLayout(fav_search_bar_layout)
@@ -890,6 +911,9 @@ class App(QMainWindow):
         self.fav_area = QScrollArea()
         self.fav_area.setWidgetResizable(True)
         self.fav_widget = QWidget()
+        # IMPORTANT: Set ID for CSS styling of background
+        self.fav_widget.setObjectName("ScrollContent")
+
         self.fav_grid = QGridLayout(self.fav_widget)
         self.fav_grid.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.fav_area.setWidget(self.fav_widget)
@@ -900,38 +924,26 @@ class App(QMainWindow):
         self.tabs.currentChanged.connect(self.on_tab_change)
         main_layout.addWidget(self.tabs)
         self.setAcceptDrops(True)
+
+        # Apply theme LAST so object names are respected
+        self.apply_theme()
         self.load_favorites()
 
     def resizeEvent(self, event):
-        # Trigger reflow when window is resized via timer (smoothness)
         self.resize_timer.start()
         super().resizeEvent(event)
 
     def reflow_grids(self):
-        # Calculate width of the internal viewport, not the scroll area widget
-        # to account for scrollbar width.
         width = self.res_area.viewport().width()
-
-        # Calculation:
-        # width >= cols * CARD_WIDTH + (cols + 1) * spacing
-        # We assume spacing is equal between cards and on edges.
-
-        # First approximation of columns with minimum spacing
         cols = (width - MIN_SPACING) // (CARD_WIDTH + MIN_SPACING)
         cols = max(1, int(cols))
 
-        # Calculate actual spacing needed to fill the width
-        # width = (cols * CARD_WIDTH) + (cols + 1) * spacing
-        # spacing = (width - cols * CARD_WIDTH) / (cols + 1)
         remaining_space = width - (cols * CARD_WIDTH)
         spacing = int(remaining_space / (cols + 1))
-
         if spacing < MIN_SPACING: spacing = MIN_SPACING
 
-        # Apply to Search Grid
         self.res_grid.setHorizontalSpacing(spacing)
         self.res_grid.setVerticalSpacing(spacing)
-        # Set margins so left/right edges are consistent with inter-card spacing
         self.res_grid.setContentsMargins(spacing, spacing, spacing, spacing)
 
         for i, widget in enumerate(self.search_card_widgets):
@@ -939,7 +951,6 @@ class App(QMainWindow):
             col = i % cols
             self.res_grid.addWidget(widget, row, col)
 
-        # Apply to Favorites Grid
         self.fav_grid.setHorizontalSpacing(spacing)
         self.fav_grid.setVerticalSpacing(spacing)
         self.fav_grid.setContentsMargins(spacing, spacing, spacing, spacing)
@@ -949,7 +960,6 @@ class App(QMainWindow):
             col = i % cols
             self.fav_grid.addWidget(widget, row, col)
 
-        # Check if we need to load more (if screen is huge and search tab is active)
         if self.tabs.currentIndex() == 0:
              QTimer.singleShot(50, self.fill_screen_if_needed)
 
@@ -960,6 +970,12 @@ class App(QMainWindow):
     def apply_theme(self):
         cfg = load_config()
         self.setStyleSheet(ThemeManager.get_stylesheet(cfg['theme']))
+
+        # Refresh individual cards
+        all_cards = self.search_card_widgets + self.fav_card_widgets
+        for card in all_cards:
+            if isinstance(card, ImageCard):
+                card.update_theme()
 
     def check_scroll(self):
         bar = self.res_area.verticalScrollBar()
@@ -973,12 +989,10 @@ class App(QMainWindow):
         self.current_query = self.search_input.text()
         self.next_ptr = None
 
-        # Clear existing search widgets
         for w in self.search_card_widgets:
             w.deleteLater()
         self.search_card_widgets.clear()
 
-        # Also clear the grid visual slots (though deleteLater handles cleanup eventually)
         while self.res_grid.count():
             item = self.res_grid.takeAt(0)
 
@@ -990,7 +1004,6 @@ class App(QMainWindow):
             loading_lbl = QLabel("Searching...")
             loading_lbl.setStyleSheet("color: #888; font-size: 16px; margin: 20px;")
             self.res_grid.addWidget(loading_lbl, 0, 0)
-            # Store temp reference so we can remove it later
             self.loading_indicator = loading_lbl
 
         self.worker = SearchWorker(self.sources[self.current_source_name], self.current_query, self.next_ptr)
@@ -1001,7 +1014,6 @@ class App(QMainWindow):
         self.is_loading = False
         self.next_ptr = next_pos
 
-        # Remove loading indicator if present
         if hasattr(self, 'loading_indicator'):
             self.loading_indicator.deleteLater()
             del self.loading_indicator
@@ -1009,7 +1021,7 @@ class App(QMainWindow):
         if not results and not self.search_card_widgets:
             lbl = QLabel("No results found.")
             self.res_grid.addWidget(lbl, 0, 0)
-            self.search_card_widgets.append(lbl) # Track it to clear later
+            self.search_card_widgets.append(lbl)
             return
 
         for item in results:
@@ -1018,7 +1030,6 @@ class App(QMainWindow):
 
         self.reflow_grids()
 
-        # Logic to check if we haven't filled the screen yet
         if self.next_ptr:
             QTimer.singleShot(50, self.fill_screen_if_needed)
 
@@ -1027,12 +1038,10 @@ class App(QMainWindow):
             return
 
         bar = self.res_area.verticalScrollBar()
-        # If no scrollbar (max=0) or we are very close to bottom even without scrolling much
         if bar.maximum() <= 0 or bar.value() >= bar.maximum() * 0.9:
             self.load_more()
 
     def load_favorites(self):
-        # Clear existing
         for w in self.fav_card_widgets:
             w.deleteLater()
         self.fav_card_widgets.clear()
