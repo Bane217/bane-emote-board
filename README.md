@@ -1,18 +1,15 @@
-# bane emote board
+# Bane Emote Board
 
-**bane emote board** is a feature-rich, PyQt6-based desktop application designed for searching, viewing, and managing emotes and GIFs. It integrates with popular platforms like Tenor and 7TV, supports standard Emojis, and allows for local file management.
+**Bane Emote Board** is a feature-rich, PyQt6-based desktop application designed for searching, viewing, and managing emotes and GIFs. It integrates with popular platforms like Tenor and 7TV, supports standard Emojis, and allows for local file management.
 
 ## Screenshots
 
-````carousel
-![Main Gallery](screenshots/gallery.png)
-<!-- slide -->
-![Search Function](screenshots/search.png)
-<!-- slide -->
-![Favorites](screenshots/favorites.png)
-<!-- slide -->
-![Source Menu](screenshots/menu.png)
-````
+<p align="center">
+  <img src="screenshots/gallery.png" width="45%" />
+  <img src="screenshots/search.png" width="45%" />
+  <img src="screenshots/favorites.png" width="45%" />
+  <img src="screenshots/menu.png" width="45%" />
+</p>
 
 ## Features
 
